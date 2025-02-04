@@ -80,7 +80,20 @@ void ATPSCharacter::BeginPlay()
 void ATPSCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	
+	Direction = FTransform ( GetControlRotation ( ) ).TransformVector ( Direction );
+	AddMovementInput ( Direction );
 
+	/*
+	//P = p0 + vt
+	FVector p0 = GetActorLocation ( ); 
+	FVector vt = Direction.GetSafeNormal() * WalkSpeed * DeltaTime;
+	FVector P = p0 + vt;
+	SetActorLocation ( P );
+	Direction = FVector::ZeroVector;
+	*/
+
+	Direction = FVector::ZeroVector;
 }
 
 // Called to bind functionality to input
@@ -94,6 +107,8 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	{
 		PlayerInput->BindAction ( IA_LookUp , ETriggerEvent::Triggered , this , &ThisClass::LockUp );
 		PlayerInput->BindAction ( IA_Turn , ETriggerEvent::Triggered , this , &ThisClass::Turn );
+		PlayerInput->BindAction ( IA_PlayerMove , ETriggerEvent::Triggered , this , &ThisClass::PlayerMove );
+		PlayerInput->BindAction ( IA_Jump , ETriggerEvent::Started , this , &ThisClass::InputJump );
 	}
 
 
@@ -112,5 +127,19 @@ void ATPSCharacter::Turn ( const FInputActionValue& InputValue )
 {
 	float value = InputValue.Get<float> ( );
 	AddControllerYawInput ( value );
+}
+
+void ATPSCharacter::PlayerMove ( const FInputActionValue& InputValue )
+{
+	FVector2D value = InputValue.Get<FVector2D> ( );
+	//상하 입력처리
+	Direction.X = value.X;
+	//좌우 입력처리
+	Direction.Y = value.Y;
+}
+
+void ATPSCharacter::InputJump ( const FInputActionValue& InputValue )
+{
+	ACharacter::Jump ( );
 }
 

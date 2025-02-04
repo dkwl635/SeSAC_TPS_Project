@@ -34,7 +34,8 @@ public:
 	class UCameraComponent* TpsCamComp;
 
 
-public: //입력
+public: 
+	//입력
 	UPROPERTY(EditDefaultsOnly , Category = "INPUT" )
 	class UInputMappingContext* IMC_TPS;
 
@@ -44,9 +45,26 @@ public: //입력
 	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
 	class UInputAction* IA_Turn;
 
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_PlayerMove;
+
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_Jump;
+
 	//좌우 회전 입력 처리
-	UFUNCTION()
 	void LockUp ( const struct FInputActionValue& InputValue );
-	UFUNCTION()
 	void Turn ( const struct FInputActionValue& InputValue );
+	//플레이어 좌우입력 받아 이동 처리
+	void PlayerMove ( const struct FInputActionValue& InputValue );
+	//플레이어 점프 처리
+	void InputJump ( const struct FInputActionValue& InputValue );
+
+public:
+	//이동 관련 변수
+	UPROPERTY(EditAnywhere , Category = "PLAYER SETTING" )
+	float WalkSpeed = 600.0f;
+	FVector Direction = FVector::ZeroVector;
+public:
+
+
 };
