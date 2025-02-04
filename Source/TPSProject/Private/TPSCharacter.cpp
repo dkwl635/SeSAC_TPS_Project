@@ -1,9 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "TPSCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
+#include "EnhancedInputComponent.h"
+#include "InputActionValue.h"
+#include "EnhancedInputSubsystems.h"
+
 
 // Sets default values
 ATPSCharacter::ATPSCharacter()
@@ -26,8 +29,6 @@ ATPSCharacter::ATPSCharacter()
 		GetMesh ( )->SetRelativeLocationAndRotation ( FVector ( 0.0f , 0.0f , -90.0f ) , FRotator ( 0.0f , -90.0f , 0.0f ) );
 	}
 #pragma endregion 
-
-	
 #pragma region 카메라 // TPS 카메라 붙이기
 	
 	//SpringArm 붙이기
@@ -35,12 +36,20 @@ ATPSCharacter::ATPSCharacter()
 	SpringArmComp->SetupAttachment ( RootComponent );
 	SpringArmComp->SetRelativeLocation ( FVector ( 0.0f , 60.0f , 0.0f ) );
 	SpringArmComp->TargetArmLength = 300;
+
 	//카메라 
 	TpsCamComp = CreateDefaultSubobject<UCameraComponent> ( TEXT ( "TpsCamComp" ) );
 	TpsCamComp->SetupAttachment ( SpringArmComp );
-#pragma endregion
 
-	
+	//카메라 회전을 위한
+	SpringArmComp->bUsePawnControlRotation = true;
+	TpsCamComp->bUsePawnControlRotation = false;
+	//캐릭터는 돌지 않도록
+	bUseControllerRotationYaw = true;
+	bUseControllerRotationRoll = false;
+	bUseControllerRotationPitch = false;
+
+#pragma endregion
 
 
 }
@@ -51,7 +60,21 @@ void ATPSCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
+#pragma region IMC_TPS 등록
+
+	APlayerController* pc = Cast<APlayerController> ( Controller );
+	if (pc)
+	{
+		UEnhancedInputLocalPlayerSubsystem* subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem> ( pc->GetLocalPlayer ( ) );
+		if (subsystem)
+		{
+			subsystem->AddMappingContext ( IMC_TPS , 0 );
+		}
+	}
+#pragma endregion
+
 }
+
 
 // Called every frame
 void ATPSCharacter::Tick(float DeltaTime)
@@ -65,5 +88,29 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+#pragma region 입력 Action 등록
+	auto PlayerInput = Cast<UEnhancedInputComponent> ( PlayerInputComponent );
+	if (PlayerInput)
+	{
+		PlayerInput->BindAction ( IA_LookUp , ETriggerEvent::Triggered , this , &ThisClass::LockUp );
+		PlayerInput->BindAction ( IA_Turn , ETriggerEvent::Triggered , this , &ThisClass::Turn );
+	}
+
+
+#pragma endregion
+
+}
+
+void ATPSCharacter::LockUp ( const FInputActionValue& InputValue )
+{
+	float value = InputValue.Get<float> ( );
+	AddControllerPitchInput ( value );
+
+}
+
+void ATPSCharacter::Turn ( const FInputActionValue& InputValue )
+{
+	float value = InputValue.Get<float> ( );
+	AddControllerYawInput ( value );
 }
 

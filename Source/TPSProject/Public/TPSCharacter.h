@@ -33,4 +33,20 @@ public:
 	UPROPERTY ( EditAnywhere , Category = Camera )
 	class UCameraComponent* TpsCamComp;
 
+
+public: //입력
+	UPROPERTY(EditDefaultsOnly , Category = "INPUT" )
+	class UInputMappingContext* IMC_TPS;
+
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_LookUp;
+
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_Turn;
+
+	//좌우 회전 입력 처리
+	UFUNCTION()
+	void LockUp ( const struct FInputActionValue& InputValue );
+	UFUNCTION()
+	void Turn ( const struct FInputActionValue& InputValue );
 };
