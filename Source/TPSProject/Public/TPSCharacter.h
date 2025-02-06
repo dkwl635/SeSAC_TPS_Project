@@ -30,7 +30,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = Camera )
 	class USpringArmComponent* SpringArmComp;
 
-	UPROPERTY ( EditAnywhere , Category = Camera )
+	UPROPERTY ( VisibleAnywhere, BlueprintReadOnly , Category = Camera )
 	class UCameraComponent* TpsCamComp;
 
 
@@ -65,6 +65,65 @@ public:
 	float WalkSpeed = 600.0f;
 	FVector Direction = FVector::ZeroVector;
 public:
+	//총 관련
+	UPROPERTY ( VisibleAnywhere , Category = GunMesh )
+	class USkeletalMeshComponent* GunMesh;
+	//총알
+	UPROPERTY( EditDefaultsOnly , Category = BulletFactory )
+	TSubclassOf<class ABullet> BulletFactory;
+	//발사 입력
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_Fire;
+	//총알 발사 함수
+	void InputFire (const struct FInputActionValue& InputValue );
 
+public:
+	//스나이퍼 총 관련
+	UPROPERTY ( VisibleAnywhere , Category = GunMesh)
+	class UStaticMeshComponent* SniperMeshComp;
+
+public:
+	//총 교체 인풋
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_GrenadeGun;
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_SniperGun;
+
+	//총 여부
+	bool bUsingGrenadeGun = true;
+
+	//총 변경 함수
+	void ChangeToGrenadeGun ( const struct FInputActionValue& InputValue );
+	void ChangeToSinperGun ( const struct FInputActionValue& InputValue );
+
+public: 
+	//스나이퍼 조준 이벤트 관련
+	UPROPERTY ( EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_Sniper;
+
+	//줌인 처리
+	void SniperAim ( const struct FInputActionValue& InputValue );
+
+	//줌인 여부
+	bool bSniperAim = false;
+
+	//줌인 UI
+	UPROPERTY(EditDefaultsOnly , Category = SniperUI )
+	TSubclassOf<class UUserWidget> SinperUIFactory;
+
+	UPROPERTY()
+	class UUserWidget* SniperUI;
+
+	//총알 파편 효과
+	UPROPERTY ( EditAnywhere , Category = BulletEffect)
+	class UParticleSystem* BulletEffectFactory;
+
+public:
+	//일반 조준 UI
+	UPROPERTY ( EditDefaultsOnly , Category = SinperUI )
+	TSubclassOf<class UUserWidget> CrossHairUIFactory;
+
+	UPROPERTY ()
+	class UUserWidget* CrossHairUI;
 
 };

@@ -6,6 +6,10 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "EnhancedInputSubsystems.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Bullet.h"
+#include "Blueprint/UserWidget.h"
+#include "Kismet/GameplayStatics.h"
 
 
 // Sets default values
@@ -50,6 +54,38 @@ ATPSCharacter::ATPSCharacter()
 	bUseControllerRotationPitch = false;
 
 #pragma endregion
+#pragma region 총  생성 / 메쉬 , 위치 조정
+	GunMesh = CreateDefaultSubobject<USkeletalMeshComponent> ( TEXT ( "GunMeshComp" ) );
+	//모델 리소스 연결
+	GunMesh->SetupAttachment ( GetMesh ( ) );
+	ConstructorHelpers::FObjectFinder<USkeletalMesh>TempGunMesh ( TEXT ( "/Script/Engine.SkeletalMesh'/Game/FPWeapon/Mesh/SK_FPGun.SK_FPGun'" ) );
+	//로드가 성공했다면
+	if (TempGunMesh.Succeeded ( ))
+	{
+		//로드한 메쉬 넣어주기
+		GunMesh->SetSkeletalMesh ( TempGunMesh.Object );
+		//위치값 반영하기
+		GunMesh->SetRelativeLocation ( FVector ( 0, 60.0f , 120.f ) );
+	}
+#pragma endregion
+#pragma region  스나이퍼 생성 /메쉬 , 위치 조정
+	//스나이퍼 컴포넌트 생성
+	SniperMeshComp = CreateDefaultSubobject<UStaticMeshComponent> ( TEXT ( "SniperMeshComp" ) );
+	//컴포넌트 위치 조정
+	SniperMeshComp->SetupAttachment ( GetMesh ( ) );
+	//메쉬 로드
+	ConstructorHelpers::FObjectFinder<UStaticMesh>TempSniperMesh ( TEXT ( "/Script/Engine.StaticMesh'/Game/SniperGun/sniper11.sniper11'" ) );
+	//로드가 성공했다면
+	if (TempSniperMesh.Succeeded ( ))
+	{
+		//로드한 메쉬 넣어주기
+		SniperMeshComp->SetStaticMesh ( TempSniperMesh.Object );
+		//총 위치, 크기 설정 및 옵션 설정
+		SniperMeshComp->SetRelativeLocation ( FVector ( 0 , 50.f , 120.f ) );
+		SniperMeshComp->SetRelativeScale3D ( FVector ( 0.15f ) );
+	}
+
+#pragma endregion
 
 
 }
@@ -73,6 +109,14 @@ void ATPSCharacter::BeginPlay()
 	}
 #pragma endregion
 
+#pragma region  스나이퍼 UI 등록
+	SniperUI = CreateWidget (GetWorld() , SinperUIFactory );
+	//일반 조준 UI
+	CrossHairUI = CreateWidget ( GetWorld ( ) , CrossHairUIFactory );
+	CrossHairUI->AddToViewport ( );
+#pragma endregion
+
+	ChangeToSinperGun ( FInputActionValue() );
 }
 
 
@@ -109,6 +153,16 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		PlayerInput->BindAction ( IA_Turn , ETriggerEvent::Triggered , this , &ThisClass::Turn );
 		PlayerInput->BindAction ( IA_PlayerMove , ETriggerEvent::Triggered , this , &ThisClass::PlayerMove );
 		PlayerInput->BindAction ( IA_Jump , ETriggerEvent::Started , this , &ThisClass::InputJump );
+		PlayerInput->BindAction ( IA_Fire , ETriggerEvent::Started , this , &ThisClass::InputFire );
+		
+		//총 교체 이벤트 바인딩
+		PlayerInput->BindAction ( IA_GrenadeGun , ETriggerEvent::Started , this , &ThisClass::ChangeToGrenadeGun );
+		PlayerInput->BindAction ( IA_SniperGun , ETriggerEvent::Started , this , &ThisClass::ChangeToSinperGun );
+
+		//줌인 이벤트 바인딩
+		PlayerInput->BindAction ( IA_Sniper , ETriggerEvent::Started , this , &ThisClass::SniperAim );
+		PlayerInput->BindAction ( IA_Sniper , ETriggerEvent::Completed , this , &ThisClass::SniperAim );
+
 	}
 
 
@@ -141,5 +195,100 @@ void ATPSCharacter::PlayerMove ( const FInputActionValue& InputValue )
 void ATPSCharacter::InputJump ( const FInputActionValue& InputValue )
 {
 	ACharacter::Jump ( );
+}
+
+void ATPSCharacter::InputFire ( const FInputActionValue& InputValue )
+{
+	//발사
+	if (bUsingGrenadeGun) // 유탄 발사 시
+	{
+		FTransform firePosition = GunMesh->GetSocketTransform ( TEXT ( "FirePosition" ) );
+		GetWorld ( )->SpawnActor<ABullet> ( BulletFactory , firePosition );
+	}
+	else				//스나이퍼 발사 시
+	{
+		//LineTrace 시작위치
+		FVector startPos = TpsCamComp->GetComponentLocation ( );
+		//LineTrace 끝 위치
+		FVector endPos = startPos + TpsCamComp->GetForwardVector ( ) * 5000.0f;
+		//LineTrace 충돌 정보를 담을 변수
+		FHitResult hitInfo;
+		//충돌 옵션 설정 변수
+		FCollisionQueryParams params;
+
+		//자기 자신 충돌 제외
+		params.AddIgnoredActor ( this );
+	
+		//LineTrace를 이용한 충돌 검출
+		bool bHit = GetWorld ( )->LineTraceSingleByChannel ( hitInfo ,startPos , endPos , ECollisionChannel::ECC_Visibility ,params );
+		//LineTrace가 충돌 했을때
+		if (bHit)
+		{
+			//충돌 처리 -> 충돌효과 표현
+			FTransform BulletTrans;
+			BulletTrans.SetLocation ( hitInfo.ImpactPoint );
+		
+			UGameplayStatics::SpawnEmitterAtLocation ( GetWorld ( ) , BulletEffectFactory , BulletTrans );
+		
+			auto hitComp = hitInfo.GetComponent ( );
+			if (hitComp && hitComp->IsSimulatingPhysics ( ))
+			{
+				FVector dir = (endPos - startPos).GetSafeNormal ( );
+				FVector force = dir * hitComp->GetMass ( ) * 500000;
+
+				hitComp->AddForceAtLocation ( force , hitInfo.ImpactPoint );
+			}
+				
+		}
+	}
+
+
+}
+
+void ATPSCharacter::ChangeToGrenadeGun ( const FInputActionValue& InputValue )
+{
+	if (bSniperAim) return;
+	
+	bUsingGrenadeGun = true;
+
+	SniperMeshComp->SetVisibility ( !bUsingGrenadeGun );
+	GunMesh->SetVisibility ( bUsingGrenadeGun );
+
+}
+
+void ATPSCharacter::ChangeToSinperGun ( const FInputActionValue& InputValue )
+{
+	bUsingGrenadeGun = false;
+	bUsingGrenadeGun = false;
+
+	SniperMeshComp->SetVisibility ( !bUsingGrenadeGun );
+	GunMesh->SetVisibility ( bUsingGrenadeGun );
+}
+
+void ATPSCharacter::SniperAim ( const FInputActionValue& InputValue )
+{
+	if (bUsingGrenadeGun) return;
+
+	
+	if (!bSniperAim)
+	{
+		//ON
+		bSniperAim = true;
+		//에임 UI
+		CrossHairUI->RemoveFromParent ( );
+		SniperUI->AddToViewport ( );
+		//카메라 시야각 FOV(Field Of View) 설정
+		TpsCamComp->SetFieldOfView ( 45.0f );
+	}
+	else
+	{
+		//Off
+		bSniperAim = false;
+		SniperUI->RemoveFromParent ( );
+		CrossHairUI->AddToViewport ( );
+		//기존 시야각 복구
+		TpsCamComp->SetFieldOfView ( 90 );
+	}
+
 }
 
