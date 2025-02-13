@@ -36,7 +36,7 @@ ABullet::ABullet()
 	MovementComp->bShouldBounce = true;					//반동 여부
 	MovementComp->Bounciness = 0.3f;					//반동 값
 
-	
+	CollisionComp->OnComponentBeginOverlap.AddDynamic ( this , &ThisClass::tssestOP );
 }
 
 // Called when the game starts or when spawned
@@ -58,5 +58,9 @@ void ABullet::Tick(float DeltaTime)
 void ABullet::Die ( )
 {
 	Destroy ( );
+}
+
+void ABullet::tssestOP ( UPrimitiveComponent* OverlappedComponent , AActor* OtherActor , UPrimitiveComponent* OtherComp , int32 OtherBodyIndex , bool bFromSweep , const FHitResult& SweepResult )
+{
 }
 

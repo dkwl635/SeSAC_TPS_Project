@@ -36,4 +36,6 @@ public:
 	class UStaticMeshComponent* MeshComp;
 
 	void Die ( );
+
+	void tssestOP (  class UPrimitiveComponent* OverlappedComponent , AActor* OtherActor , class UPrimitiveComponent* OtherComp , int32  OtherBodyIndex , bool  bFromSweep , const struct FHitResult& SweepResult );
 };

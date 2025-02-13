@@ -62,7 +62,12 @@ public:
 public:
 	//이동 관련 변수
 	UPROPERTY(EditAnywhere , Category = "PLAYER SETTING" )
-	float WalkSpeed = 600.0f;
+	float WalkSpeed = 200.0f;
+	//달리기 속도 
+	UPROPERTY ( EditAnywhere , Category = "PLAYER SETTING" )
+	float RunSpeed = 600.0f;
+
+
 	FVector Direction = FVector::ZeroVector;
 public:
 	//총 관련
@@ -125,5 +130,40 @@ public:
 
 	UPROPERTY ()
 	class UUserWidget* CrossHairUI;
+
+public:
+	//달리기 관련
+	UPROPERTY(EditDefaultsOnly , Category = "INPUT" )
+	class UInputAction* IA_Run;
+
+	void InputRun ( );
+
+	//쪼그려 걷기
+	//LCtrl 버튼을 누르고 있으면 쪼그리기, 떼면 해제
+	//C 버튼은 쪼그리기 토글 
+	UPROPERTY(EditDefaultsOnly , Category  = "INPUT" )
+	class UInputAction* IA_CrouchCtrl;
+	UPROPERTY(EditDefaultsOnly , Category  = "INPUT" )
+	class UInputAction* IA_CrouchC;
+
+	bool bCrouched = false;
+
+	UFUNCTION()
+	void InputCrouchCtrl ( );
+	UFUNCTION()
+	void InputUnCrouchCtrl ( );
+	UFUNCTION ( )
+	void InputCrouchToggle ( );
+
+	UPROPERTY()
+	class UTPSPlayerAnimInstance* Anim;
+
+	//카메라 셰이크 블루프린트를 저장할 변수
+	UPROPERTY(EditDefaultsOnly , Category = CameraMotion )
+	TSubclassOf<class UCameraShakeBase> CameraShakeBase;
+
+	//총 발사 사운드  저장할 변수
+	UPROPERTY ( EditDefaultsOnly , Category = Sound )
+	class USoundBase* FireSound;
 
 };

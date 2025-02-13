@@ -10,6 +10,9 @@
 #include "Bullet.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "EnemyFSM.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "TPSPlayerAnimInstance.h"
 
 
 // Sets default values
@@ -53,6 +56,8 @@ ATPSCharacter::ATPSCharacter()
 	bUseControllerRotationRoll = false;
 	bUseControllerRotationPitch = false;
 
+	//쪼그리기 가능
+	GetCharacterMovement ( )->NavAgentProps.bCanCrouch = true;
 #pragma endregion
 #pragma region 총  생성 / 메쉬 , 위치 조정
 	GunMesh = CreateDefaultSubobject<USkeletalMeshComponent> ( TEXT ( "GunMeshComp" ) );
@@ -68,11 +73,22 @@ ATPSCharacter::ATPSCharacter()
 		GunMesh->SetRelativeLocation ( FVector ( 0, 60.0f , 120.f ) );
 	}
 #pragma endregion
+#pragma region 애님 블루프린트 파일로 로드해 적용하기
+	ConstructorHelpers::FClassFinder<UTPSPlayerAnimInstance>TempAnimInst (
+		TEXT ( "/Script/Engine.AnimBlueprint'/Game/KJW/Blueprint/Anim/ABP_TPSPlayer.ABP_TPSPlayer_C'" ) );
+	if (TempAnimInst.Succeeded())
+	{
+		GetMesh ( )->SetAnimInstanceClass ( TempAnimInst.Class );
+	}
+	
+
+
+#pragma endregion
 #pragma region  스나이퍼 생성 /메쉬 , 위치 조정
 	//스나이퍼 컴포넌트 생성
 	SniperMeshComp = CreateDefaultSubobject<UStaticMeshComponent> ( TEXT ( "SniperMeshComp" ) );
 	//컴포넌트 위치 조정
-	SniperMeshComp->SetupAttachment ( GetMesh ( ) );
+	SniperMeshComp->SetupAttachment ( GetMesh ( ) , TEXT("hand_rSocket") );
 	//메쉬 로드
 	ConstructorHelpers::FObjectFinder<UStaticMesh>TempSniperMesh ( TEXT ( "/Script/Engine.StaticMesh'/Game/SniperGun/sniper11.sniper11'" ) );
 	//로드가 성공했다면
@@ -81,10 +97,25 @@ ATPSCharacter::ATPSCharacter()
 		//로드한 메쉬 넣어주기
 		SniperMeshComp->SetStaticMesh ( TempSniperMesh.Object );
 		//총 위치, 크기 설정 및 옵션 설정
-		SniperMeshComp->SetRelativeLocation ( FVector ( 0 , 50.f , 120.f ) );
-		SniperMeshComp->SetRelativeScale3D ( FVector ( 0.15f ) );
+		//(X=-33.490276,Y=-6.215357,Z=4.000000)
+		//(Pitch=-0.000000,Yaw=109.999999,Roll=0.000000)
+		SniperMeshComp->SetRelativeLocation ( FVector ( -33.4902f , -6.215357f , 4.000f ) );
+		SniperMeshComp->SetWorldRotation ( FRotator ( 0.0f, 109.999f , 0.0f ) );
+		SniperMeshComp->SetRelativeScale3D ( FVector ( 0.125f ) );
+	
+		
 	}
 
+#pragma endregion
+#pragma region  사운드 파일 가져오기
+	ConstructorHelpers::FObjectFinder<USoundBase>TempSound ( TEXT ( "/Script/Engine.SoundWave'/Game/SniperGun/Rifle.Rifle'" ) );
+	//로드가 성공했다면
+	if (TempSound.Succeeded ( ))
+	{
+		FireSound = TempSound.Object;
+	}
+
+	 
 #pragma endregion
 
 
@@ -116,7 +147,14 @@ void ATPSCharacter::BeginPlay()
 	CrossHairUI->AddToViewport ( );
 #pragma endregion
 
+
+	Anim = Cast<UTPSPlayerAnimInstance> ( GetMesh ( )->GetAnimInstance ( ) );
+
+	//초기 걷기 속도 셋팅
+	GetCharacterMovement ( )->MaxWalkSpeed = WalkSpeed;
+
 	ChangeToSinperGun ( FInputActionValue() );
+
 }
 
 
@@ -128,15 +166,6 @@ void ATPSCharacter::Tick(float DeltaTime)
 	Direction = FTransform ( GetControlRotation ( ) ).TransformVector ( Direction );
 	AddMovementInput ( Direction );
 
-	/*
-	//P = p0 + vt
-	FVector p0 = GetActorLocation ( ); 
-	FVector vt = Direction.GetSafeNormal() * WalkSpeed * DeltaTime;
-	FVector P = p0 + vt;
-	SetActorLocation ( P );
-	Direction = FVector::ZeroVector;
-	*/
-
 	Direction = FVector::ZeroVector;
 }
 
@@ -145,7 +174,7 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-#pragma region 입력 Action 등록
+	//입력 Action 등록
 	auto PlayerInput = Cast<UEnhancedInputComponent> ( PlayerInputComponent );
 	if (PlayerInput)
 	{
@@ -163,10 +192,17 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		PlayerInput->BindAction ( IA_Sniper , ETriggerEvent::Started , this , &ThisClass::SniperAim );
 		PlayerInput->BindAction ( IA_Sniper , ETriggerEvent::Completed , this , &ThisClass::SniperAim );
 
+		//달리기 입력 이벤트 바인딩
+		PlayerInput->BindAction ( IA_Run , ETriggerEvent::Started , this , &ThisClass::InputRun );
+		PlayerInput->BindAction ( IA_Run , ETriggerEvent::Completed , this , &ThisClass::InputRun );
+	
+		//쪼그려 앉기 
+		PlayerInput->BindAction ( IA_CrouchCtrl , ETriggerEvent::Started , this , &ThisClass::InputCrouchCtrl );
+		PlayerInput->BindAction ( IA_CrouchCtrl , ETriggerEvent::Completed , this , &ThisClass::InputUnCrouchCtrl );
+		PlayerInput->BindAction ( IA_CrouchC , ETriggerEvent::Started , this , &ThisClass::InputCrouchToggle );
 	}
 
 
-#pragma endregion
 
 }
 
@@ -199,6 +235,19 @@ void ATPSCharacter::InputJump ( const FInputActionValue& InputValue )
 
 void ATPSCharacter::InputFire ( const FInputActionValue& InputValue )
 {
+	//카메라 쉐이크 재생
+	APlayerController* pc =Cast<APlayerController>(GetController ( ));
+	pc->PlayerCameraManager->StartCameraShake ( CameraShakeBase );
+
+	//사운드
+	UGameplayStatics::PlaySound2D ( GetWorld ( ) , FireSound );
+
+	//공격 애니 몽타주 재생
+	UTPSPlayerAnimInstance* animIns = Cast<UTPSPlayerAnimInstance>(GetMesh ( )->GetAnimInstance ( ));
+	if (animIns)
+	{
+		animIns->PlayAttackAnim ( );
+	}
 	//발사
 	if (bUsingGrenadeGun) // 유탄 발사 시
 	{
@@ -237,6 +286,18 @@ void ATPSCharacter::InputFire ( const FInputActionValue& InputValue )
 				FVector force = dir * hitComp->GetMass ( ) * 500000;
 
 				hitComp->AddForceAtLocation ( force , hitInfo.ImpactPoint );
+			}
+
+
+			//부딪힌 대상이 적인지
+			auto enemy = hitInfo.GetActor ( )->GetDefaultSubobjectByName ( TEXT ( "FSM" ) );
+			if (enemy)
+			{
+				auto fsm = Cast<UEnemyFSM> ( enemy );
+				if (fsm)
+				{
+					fsm->OnDamageProcess ( );
+				}
 			}
 				
 		}
@@ -290,5 +351,40 @@ void ATPSCharacter::SniperAim ( const FInputActionValue& InputValue )
 		TpsCamComp->SetFieldOfView ( 90 );
 	}
 
+}
+
+void ATPSCharacter::InputRun ( )
+{
+	//현제 최고 속도가 걷기 속도보다 빠르면
+	if(GetCharacterMovement()->MaxWalkSpeed > WalkSpeed)
+	{
+		GetCharacterMovement ( )->MaxWalkSpeed = WalkSpeed;
+	}
+	else
+	{
+		GetCharacterMovement ( )->MaxWalkSpeed = RunSpeed;
+	}
+
+}
+
+void ATPSCharacter::InputCrouchCtrl ( )
+{
+	Crouch ( );
+	Anim->IsCrouched = true;
+}
+
+void ATPSCharacter::InputUnCrouchCtrl ( )
+{
+	UnCrouch ( );
+	Anim->IsCrouched = false;
+}
+
+void ATPSCharacter::InputCrouchToggle ( )
+{
+	bCrouched = !bCrouched;
+	if (bCrouched) { Crouch ( ); }
+	else { UnCrouch ( ); }
+
+	Anim->IsCrouched = bCrouched;
 }
 
